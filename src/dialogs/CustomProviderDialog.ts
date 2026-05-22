@@ -23,6 +23,7 @@ export class CustomProviderDialog extends DialogBase {
 	@state() private testing = false;
 	@state() private testError = "";
 	@state() private discoveredModels: Model<any>[] = [];
+	@state() private manualModels: Model<any>[] = [];
 
 	protected modalWidth = "min(800px, 90vw)";
 	protected modalHeight = "min(700px, 90vh)";
@@ -49,6 +50,7 @@ export class CustomProviderDialog extends DialogBase {
 			this.baseUrl = this.provider.baseUrl;
 			this.apiKey = this.provider.apiKey || "";
 			this.discoveredModels = this.provider.models || [];
+			this.manualModels = this.provider.models || [];
 		} else {
 			this.name = "";
 			this.type = this.initialType || "openai-completions";
@@ -56,6 +58,7 @@ export class CustomProviderDialog extends DialogBase {
 			this.updateDefaultBaseUrl();
 			this.apiKey = "";
 			this.discoveredModels = [];
+			this.manualModels = [];
 		}
 		this.testError = "";
 		this.testing = false;
@@ -110,9 +113,69 @@ export class CustomProviderDialog extends DialogBase {
 		}
 	}
 
+	private createManualModel(): Model<any> {
+		const id = "";
+		return {
+			id,
+			name: id,
+			api: this.type as Model<any>["api"],
+			provider: this.name as Model<any>["provider"],
+			baseUrl: this.baseUrl,
+			reasoning: false,
+			input: ["text"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+			contextWindow: 128000,
+			maxTokens: 4096,
+		};
+	}
+
+	private addManualModel() {
+		this.manualModels = [...this.manualModels, this.createManualModel()];
+	}
+
+	private updateManualModel(index: number, patch: Partial<Model<any>>) {
+		this.manualModels = this.manualModels.map((model, modelIndex) =>
+			modelIndex === index ? { ...model, ...patch } : model,
+		);
+	}
+
+	private updateManualModelCost(index: number, patch: Partial<Model<any>["cost"]>) {
+		this.manualModels = this.manualModels.map((model, modelIndex) =>
+			modelIndex === index ? { ...model, cost: { ...model.cost, ...patch } } : model,
+		);
+	}
+
+	private removeManualModel(index: number) {
+		this.manualModels = this.manualModels.filter((_, modelIndex) => modelIndex !== index);
+	}
+
+	private syncManualModel(model: Model<any>): Model<any> {
+		return {
+			...model,
+			name: model.name || model.id,
+			api: this.type as Model<any>["api"],
+			provider: this.name as Model<any>["provider"],
+			baseUrl: this.baseUrl,
+		};
+	}
+
 	private async save() {
 		if (!this.name || !this.baseUrl) {
 			alert(i18n("Please fill in all required fields"));
+			return;
+		}
+
+		const manualModels = this.manualModels
+			.map((model) => this.syncManualModel(model))
+			.filter((model) => model.id.trim().length > 0);
+
+		if (!this.isAutoDiscoveryType() && manualModels.length === 0) {
+			alert("Please add at least one model");
 			return;
 		}
 
@@ -125,7 +188,7 @@ export class CustomProviderDialog extends DialogBase {
 				type: this.type,
 				baseUrl: this.baseUrl,
 				apiKey: this.apiKey || undefined,
-				models: this.isAutoDiscoveryType() ? undefined : this.provider?.models || [],
+				models: this.isAutoDiscoveryType() ? undefined : manualModels,
 			};
 
 			await storage.customProviders.set(provider);
@@ -138,6 +201,144 @@ export class CustomProviderDialog extends DialogBase {
 			console.error("Failed to save provider:", error);
 			alert(i18n("Failed to save provider"));
 		}
+	}
+
+	private renderManualModels(): TemplateResult {
+		return html`
+			<div class="flex flex-col gap-3 border border-border rounded-md p-4">
+				<div class="flex items-center justify-between gap-2">
+					<div>
+						<div class="text-sm font-medium text-foreground">${i18n("Models")}</div>
+						<div class="text-xs text-muted-foreground">Add the model IDs exposed by this provider.</div>
+					</div>
+					${Button({
+						onClick: () => this.addManualModel(),
+						variant: "outline",
+						size: "sm",
+						children: "Add Model",
+					})}
+				</div>
+
+				${
+					this.manualModels.length === 0
+						? html`<div class="text-sm text-muted-foreground">No models added yet.</div>`
+						: html`
+							${this.manualModels.map(
+								(model, index) => html`
+									<div class="flex flex-col gap-3 border border-border rounded-md p-3">
+										<div class="flex items-center justify-between gap-2">
+											<div class="text-sm font-medium">${model.id || "New Model"}</div>
+											${Button({
+												onClick: () => this.removeManualModel(index),
+												variant: "ghost",
+												size: "sm",
+												children: i18n("Remove"),
+											})}
+										</div>
+
+										<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+											<div class="flex flex-col gap-2">
+												${Label({ children: "Model ID" })}
+												${Input({
+													value: model.id,
+													placeholder: "gpt-4o-mini",
+													onInput: (e: Event) => {
+														const id = (e.target as HTMLInputElement).value;
+														this.updateManualModel(index, { id, name: model.name || id });
+													},
+												})}
+											</div>
+											<div class="flex flex-col gap-2">
+												${Label({ children: "Display Name" })}
+												${Input({
+													value: model.name,
+													placeholder: model.id || "GPT-4o Mini",
+													onInput: (e: Event) =>
+														this.updateManualModel(index, { name: (e.target as HTMLInputElement).value }),
+												})}
+											</div>
+											<div class="flex flex-col gap-2">
+												${Label({ children: "Context Window" })}
+												${Input({
+													type: "number",
+													value: String(model.contextWindow),
+													onInput: (e: Event) =>
+														this.updateManualModel(index, {
+															contextWindow: Number((e.target as HTMLInputElement).value) || 0,
+														}),
+												})}
+											</div>
+											<div class="flex flex-col gap-2">
+												${Label({ children: "Max Output Tokens" })}
+												${Input({
+													type: "number",
+													value: String(model.maxTokens),
+													onInput: (e: Event) =>
+														this.updateManualModel(index, {
+															maxTokens: Number((e.target as HTMLInputElement).value) || 0,
+														}),
+												})}
+											</div>
+										</div>
+
+										<div class="flex flex-wrap gap-4 text-sm">
+											<label class="flex items-center gap-2">
+												<input
+													type="checkbox"
+													.checked=${model.reasoning}
+													@change=${(e: Event) =>
+														this.updateManualModel(index, {
+															reasoning: (e.target as HTMLInputElement).checked,
+														})}
+												/>
+												Reasoning
+											</label>
+											<label class="flex items-center gap-2">
+												<input
+													type="checkbox"
+													.checked=${model.input.includes("image")}
+													@change=${(e: Event) =>
+														this.updateManualModel(index, {
+															input: (e.target as HTMLInputElement).checked
+																? ["text", "image"]
+																: ["text"],
+														})}
+												/>
+												${i18n("Vision")}
+											</label>
+										</div>
+
+										<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+											<div class="flex flex-col gap-2">
+												${Label({ children: "Input Cost ($/M tokens)" })}
+												${Input({
+													type: "number",
+													value: String(model.cost.input),
+													onInput: (e: Event) =>
+														this.updateManualModelCost(index, {
+															input: Number((e.target as HTMLInputElement).value) || 0,
+														}),
+												})}
+											</div>
+											<div class="flex flex-col gap-2">
+												${Label({ children: "Output Cost ($/M tokens)" })}
+												${Input({
+													type: "number",
+													value: String(model.cost.output),
+													onInput: (e: Event) =>
+														this.updateManualModelCost(index, {
+															output: Number((e.target as HTMLInputElement).value) || 0,
+														}),
+												})}
+											</div>
+										</div>
+									</div>
+								`,
+							)}
+						`
+				}
+			</div>
+		`;
 	}
 
 	protected override renderContent(): TemplateResult {
@@ -246,9 +447,7 @@ export class CustomProviderDialog extends DialogBase {
 										}
 									</div>
 								`
-								: html` <div class="text-sm text-muted-foreground">
-									${i18n("For manual provider types, add models after saving the provider.")}
-								</div>`
+								: this.renderManualModels()
 						}
 					</div>
 				</div>

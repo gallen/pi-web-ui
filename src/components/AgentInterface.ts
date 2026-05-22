@@ -218,9 +218,11 @@ export class AgentInterface extends LitElement {
 		if (!session) throw new Error("No session set on AgentInterface");
 		if (!session.state.model) throw new Error("No model set on AgentInterface");
 
-		// Check if API key exists for the provider (only needed in direct mode)
+		// Check if API key exists for the provider (only needed in direct mode).
+		// Prefer the session resolver so applications can provide custom provider keys.
 		const provider = session.state.model.provider;
-		const apiKey = await getAppStorage().providerKeys.get(provider);
+		const apiKey =
+			(await session.getApiKey?.(provider)) ?? (await getAppStorage().providerKeys.get(provider)) ?? undefined;
 
 		// If no API key, prompt for it
 		if (!apiKey) {
@@ -276,7 +278,7 @@ export class AgentInterface extends LitElement {
 			<div class="flex flex-col gap-3">
 				<!-- Stable messages list - won't re-render during streaming -->
 				<message-list
-					.messages=${this.session.state.messages}
+					.messages=${[...this.session.state.messages]}
 					.tools=${state.tools}
 					.pendingToolCalls=${this.session ? this.session.state.pendingToolCalls : new Set<string>()}
 					.isStreaming=${state.isStreaming}
