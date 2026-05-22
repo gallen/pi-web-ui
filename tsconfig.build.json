@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": false,
     "rewriteRelativeImportExtensions": true,
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
