@@ -1,6 +1,7 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "experimentalDecorators": true,
     "noEmit": true
   },
   "include": ["src/**/*"]
