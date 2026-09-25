@@ -9,9 +9,10 @@ import type { ToolRenderer } from "./types.ts";
 export const toolRenderers = new Map<string, ToolRenderer>();
 
 /**
- * Register a custom tool renderer
+ * Register a custom tool renderer. Compare the render signature structurally so
+ * JSON-compatible detail interfaces do not need a JsonValue index signature.
  */
-export function registerToolRenderer(toolName: string, renderer: ToolRenderer): void {
+export function registerToolRenderer(toolName: string, renderer: Pick<ToolRenderer, "render">): void {
 	toolRenderers.set(toolName, renderer);
 }
 
