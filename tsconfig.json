@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "experimentalDecorators": true,
